@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electricity Billing System</title>
+<style>
+  :root { --ink:#1b2a33; --paper:#f7f9fa; --line:#cfd8dc; --accent:#0b6e8a; --warn:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Georgia, "Times New Roman", serif; background:var(--paper); color:var(--ink); }
+  header { background:var(--ink); color:#fff; padding:22px 16px; text-align:center; }
+  header h1 { margin:0; font-size:1.6rem; }
+  header p { margin:6px 0 0; opacity:.8; font-size:.95rem; }
+  main { max-width:860px; margin:24px auto; padding:0 16px; display:grid; gap:20px; grid-template-columns:1fr 1fr; }
+  @media (max-width:720px){ main { grid-template-columns:1fr; } }
+  section { background:#fff; border:1px solid var(--line); border-radius:6px; padding:20px; }
+  h2 { margin-top:0; font-size:1.15rem; }
+  label { display:block; margin:12px 0 4px; font-size:.9rem; }
+  input, select { width:100%; padding:9px; border:1px solid var(--line); border-radius:4px; font-size:1rem; font-family:inherit; }
+  input:focus, select:focus, button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  button { margin-top:16px; padding:10px 16px; border:0; border-radius:4px; background:var(--accent); color:#fff; font-size:1rem; cursor:pointer; font-family:inherit; }
+  button.secondary { background:#fff; color:var(--ink); border:1px solid var(--line); margin-left:6px; }
+  #error { color:var(--warn); margin-top:10px; min-height:1.2em; font-size:.9rem; }
+  table { width:100%; border-collapse:collapse; font-size:.95rem; }
+  td { padding:7px 0; border-bottom:1px dashed var(--line); }
+  td:last-child { text-align:right; }
+  tr.total td { font-weight:bold; font-size:1.1rem; border-bottom:2px solid var(--ink); border-top:2px solid var(--ink); }
+  .empty { color:#607d8b; }
+  .rates { font-size:.85rem; color:#455a64; line-height:1.5; }
+  @media print { header, #formSection, .noprint { display:none; } main { display:block; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Electricity Billing System</h1>
+</header>
+
+<main>
+  <section id="formSection">
+    <h2>Customer details</h2>
+    <label for="cid">Customer ID</label>
+    <input id="cid" type="number" min="1" placeholder="e.g. 101">
+
+    <label for="name">Customer name</label>
+    <input id="name" type="text" placeholder="e.g. Rahul Sharma">
+
+    <label for="type">Connection type</label>
+    <select id="type">
+      <option value="domestic">Domestic</option>
+      <option value="commercial">Commercial</option>
+    </select>
+
+    <label for="prev">Previous meter reading</label>
+    <input id="prev" type="number" min="0" placeholder="e.g. 1200">
+
+    <label for="curr">Current meter reading</label>
+    <input id="curr" type="number" min="0" placeholder="e.g. 1385">
+
+    <div id="error" role="alert"></div>
+    <button onclick="generateBill()">Generate bill</button>
+    <button class="secondary" onclick="resetForm()">Clear</button>
+  </section>
+
+  <section>
+    <h2>Bill</h2>
+    <div id="billArea"><p class="empty">Enter the meter readings and select Generate bill.</p></div>
+    <button class="noprint" id="printBtn" style="display:none" onclick="window.print()">Print bill</button>
+    <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+    <div class="rates">
+      <strong>Rates per unit (Rs)</strong><br>
+      Domestic: 1&ndash;100 = 1.50, 101&ndash;200 = 2.50, 201&ndash;300 = 4.00, above 300 = 6.00. Fixed charge Rs 50.<br>
+      Commercial: 1&ndash;100 = 4.00, 101&ndash;200 = 5.50, 201&ndash;300 = 7.00, above 300 = 9.00. Fixed charge Rs 150.<br>
+      Tax: 5% on energy + fixed charge.
+    </div>
+  </section>
+</main>
+
+<script>
+  // Same slab logic as billing.cpp
+  function calcEnergy(units, domestic) {
+    var r = domestic ? [1.5, 2.5, 4.0, 6.0] : [4.0, 5.5, 7.0, 9.0];
+    if (units <= 100) return units * r[0];
+    if (units <= 200) return 100 * r[0] + (units - 100) * r[1];
+    if (units <= 300) return 100 * r[0] + 100 * r[1] + (units - 200) * r[2];
+    return 100 * r[0] + 100 * r[1] + 100 * r[2] + (units - 300) * r[3];
+  }
+
+  function generateBill() {
+    var id = document.getElementById('cid').value.trim();
+    var name = document.getElementById('name').value.trim();
+    var domestic = document.getElementById('type').value === 'domestic';
+    var prev = parseInt(document.getElementById('prev').value, 10);
+    var curr = parseInt(document.getElementById('curr').value, 10);
+    var err = document.getElementById('error');
+    err.textContent = '';
+
+    if (!id || !name || isNaN(prev) || isNaN(curr)) {
+      err.textContent = 'Fill in every field before generating the bill.';
+      return;
+    }
+    if (curr < prev) {
+      err.textContent = 'Current reading cannot be less than the previous reading.';
+      return;
+    }
+
+    var units = curr - prev;
+    var energy = calcEnergy(units, domestic);
+    var fixed = domestic ? 50 : 150;
+    var tax = (energy + fixed) * 0.05;
+    var total = energy + fixed + tax;
+    var f = function (n) { return 'Rs ' + n.toFixed(2); };
+
+    document.getElementById('billArea').innerHTML =
+      '<table>' +
+      '<tr><td>Customer ID</td><td>' + id + '</td></tr>' +
+      '<tr><td>Name</td><td>' + name.replace(/</g, '&lt;') + '</td></tr>' +
+      '<tr><td>Type</td><td>' + (domestic ? 'Domestic' : 'Commercial') + '</td></tr>' +
+      '<tr><td>Previous reading</td><td>' + prev + '</td></tr>' +
+      '<tr><td>Current reading</td><td>' + curr + '</td></tr>' +
+      '<tr><td>Units consumed</td><td>' + units + '</td></tr>' +
+      '<tr><td>Energy charge</td><td>' + f(energy) + '</td></tr>' +
+      '<tr><td>Fixed charge</td><td>' + f(fixed) + '</td></tr>' +
+      '<tr><td>Tax (5%)</td><td>' + f(tax) + '</td></tr>' +
+      '<tr class="total"><td>Total payable</td><td>' + f(total) + '</td></tr>' +
+      '</table>';
+    document.getElementById('printBtn').style.display = 'inline-block';
+  }
+
+  function resetForm() {
+    ['cid', 'name', 'prev', 'curr'].forEach(function (i) { document.getElementById(i).value = ''; });
+    document.getElementById('error').textContent = '';
+    document.getElementById('billArea').innerHTML = '<p class="empty">Enter the meter readings and select Generate bill.</p>';
+    document.getElementById('printBtn').style.display = 'none';
+  }
+</script>
+</body>
+</html>
